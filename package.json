@@ -1,6 +1,6 @@
 {
   "name": "@fundwave/oidc-client",
-  "version": "3.0.0",
+  "version": "3.0.1-github-package.0",
   "description": "Client for managing tokens for API Calls",
   "license": "MIT",
   "author": "The Fundwave Authors",
