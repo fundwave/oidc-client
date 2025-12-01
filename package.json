@@ -1,6 +1,6 @@
 {
   "name": "@fundwave/oidc-client",
-  "version": "3.0.0",
+  "version": "3.0.1-github-package.0",
   "description": "Client for managing tokens for API Calls",
   "license": "MIT",
   "author": "The Fundwave Authors",
@@ -34,10 +34,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/getfundwave/oidc-client.git"
+    "url": "git+https://github.com/fundwave/oidc-client.git"
   },
   "bugs": {
-    "url": "https://github.com/getfundwave/oidc-client/issues"
+    "url": "https://github.com/fundwave/oidc-client/issues"
   },
-  "homepage": "https://github.com/getfundwave/oidc-client#readme"
+  "homepage": "https://github.com/fundwave/oidc-client#readme"
 }
