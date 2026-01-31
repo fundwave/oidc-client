@@ -54,16 +54,16 @@ test("Set base-url", () => {
   expect(baseUrl).toBe("https://fundwave.com");
 });
 
-test("Verify invalid token", () => {
+test("Verify invalid token", async () => {
   prepareToken("invalid");
 
-  expect(OIDCClient.verifyTokenValidity()).toBe(false);
+  expect(await OIDCClient.verifyTokenValidity()).toBe(false);
 });
 
-test("Verify valid token", () => {
+test("Verify valid token", async () => {
   prepareToken("valid");
 
-  expect(OIDCClient.verifyTokenValidity()).toBe(true);
+  expect(await OIDCClient.verifyTokenValidity()).toBe(true);
 });
 
 test("Prepare headers with valid token", async () => {
