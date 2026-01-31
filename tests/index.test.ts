@@ -169,3 +169,176 @@ test("Refresh Token URL (w/ malformed base-url | trailing '/')", async () => {
   await OIDCClient.prepareHeaders();
   expect(suppliedRefreshPath).toEqual(expectedPefreshPath);
 });
+
+describe("Storage Provider Tests", () => {
+  test("BrowserStorageProvider with default token names", async () => {
+    const { BrowserStorageProvider } = await import("../src");
+    const provider = new BrowserStorageProvider();
+    
+    provider.setItem("token", "test-token");
+    provider.setItem("refreshToken", "test-refresh-token");
+    
+    expect(provider.getItem("token")).toBe("test-token");
+    expect(provider.getItem("refreshToken")).toBe("test-refresh-token");
+    expect(sessionStorage.getItem("token")).toBe("test-token");
+    expect(localStorage.getItem("refreshToken")).toBe("test-refresh-token");
+    
+    provider.removeItem("token");
+    provider.removeItem("refreshToken");
+    
+    expect(provider.getItem("token")).toBeNull();
+    expect(provider.getItem("refreshToken")).toBeNull();
+  });
+
+  test("BrowserStorageProvider with custom token names", async () => {
+    const { BrowserStorageProvider } = await import("../src");
+    const provider = new BrowserStorageProvider({ token: "customToken", refreshToken: "customRefreshToken" });
+    
+    provider.setItem("token", "test-token");
+    provider.setItem("refreshToken", "test-refresh-token");
+    
+    expect(provider.getItem("token")).toBe("test-token");
+    expect(provider.getItem("refreshToken")).toBe("test-refresh-token");
+    expect(sessionStorage.getItem("customToken")).toBe("test-token");
+    expect(localStorage.getItem("customRefreshToken")).toBe("test-refresh-token");
+    
+    // Check that default token names are not used
+    expect(sessionStorage.getItem("token")).toBeNull();
+    expect(localStorage.getItem("refreshToken")).toBeNull();
+    
+    provider.removeItem("token");
+    provider.removeItem("refreshToken");
+    
+    expect(provider.getItem("token")).toBeNull();
+    expect(provider.getItem("refreshToken")).toBeNull();
+  });
+
+  test("InMemoryStorageProvider", async () => {
+    const { InMemoryStorageProvider } = await import("../src");
+    const provider = new InMemoryStorageProvider();
+    
+    provider.setItem("token", "test-token");
+    provider.setItem("refreshToken", "test-refresh-token");
+    
+    expect(provider.getItem("token")).toBe("test-token");
+    expect(provider.getItem("refreshToken")).toBe("test-refresh-token");
+    
+    // Ensure it doesn't touch browser storage
+    expect(sessionStorage.getItem("token")).toBeNull();
+    expect(localStorage.getItem("refreshToken")).toBeNull();
+    
+    provider.removeItem("token");
+    expect(provider.getItem("token")).toBeNull();
+    expect(provider.getItem("refreshToken")).toBe("test-refresh-token");
+    
+    provider.clear();
+    expect(provider.getItem("refreshToken")).toBeNull();
+  });
+
+  test("OIDCClient with custom token names", async () => {
+    clearStorageMocks();
+    
+    const client = new Client({
+      baseUrl: providedBaseURL,
+      tokenNames: { token: "myToken", refreshToken: "myRefreshToken" }
+    });
+    
+    const { token: validToken } = prepareToken("valid");
+    
+    // Move tokens to custom names
+    sessionStorage.removeItem("token");
+    localStorage.removeItem("refreshToken");
+    sessionStorage.setItem("myToken", validToken);
+    localStorage.setItem("myRefreshToken", validToken);
+    
+    const headers = await client.prepareHeaders();
+    expect(headers.Authorization).toBe(`Bearer ${validToken}`);
+  });
+
+  test("OIDCClient with InMemoryStorageProvider", async () => {
+    expect.assertions(1);
+    
+    const { InMemoryStorageProvider } = await import("../src");
+    const provider = new InMemoryStorageProvider();
+    
+    const client = new Client({
+      baseUrl: providedBaseURL,
+      storageProvider: provider
+    });
+    
+    const { token: validToken } = prepareToken("valid");
+    
+    // Set tokens in the in-memory provider
+    provider.setItem("token", validToken);
+    provider.setItem("refreshToken", validToken);
+    
+    const headers = await client.prepareHeaders();
+    expect(headers.Authorization).toBe(`Bearer ${validToken}`);
+  });
+
+  test("Multiple OIDCClient instances with different storage providers", async () => {
+    expect.assertions(2);
+    
+    clearStorageMocks();
+    const { InMemoryStorageProvider } = await import("../src");
+    
+    // Instance 1: BrowserStorageProvider with default token names
+    const client1 = new Client({
+      baseUrl: providedBaseURL,
+    });
+    
+    // Instance 2: InMemoryStorageProvider
+    const provider2 = new InMemoryStorageProvider();
+    const client2 = new Client({
+      baseUrl: providedBaseURL,
+      storageProvider: provider2
+    });
+    
+    const { token: token1 } = prepareToken("valid");
+    const expiryTime2 = timeWithOffsetFromThreshold(5);
+    const token2 = jwt.sign({ exp: expiryTime2 }, "different-secret");
+    
+    // Set different tokens for each instance
+    provider2.setItem("token", token2);
+    provider2.setItem("refreshToken", token2);
+    
+    const headers1 = await client1.prepareHeaders();
+    const headers2 = await client2.prepareHeaders();
+    
+    expect(headers1.Authorization).toBe(`Bearer ${token1}`);
+    expect(headers2.Authorization).toBe(`Bearer ${token2}`);
+  });
+
+  test("Multiple OIDCClient instances with different token names", async () => {
+    expect.assertions(2);
+    
+    clearStorageMocks();
+    
+    // Instance 1: Default token names
+    const client1 = new Client({
+      baseUrl: providedBaseURL,
+    });
+    
+    // Instance 2: Custom token names
+    const client2 = new Client({
+      baseUrl: providedBaseURL,
+      tokenNames: { token: "token2", refreshToken: "refreshToken2" }
+    });
+    
+    const expiryTime = timeWithOffsetFromThreshold(5);
+    const token1 = jwt.sign({ exp: expiryTime }, "secret1");
+    const token2 = jwt.sign({ exp: expiryTime }, "secret2");
+    
+    // Set different tokens for each instance
+    sessionStorage.setItem("token", token1);
+    localStorage.setItem("refreshToken", token1);
+    sessionStorage.setItem("token2", token2);
+    localStorage.setItem("refreshToken2", token2);
+    
+    const headers1 = await client1.prepareHeaders();
+    const headers2 = await client2.prepareHeaders();
+    
+    expect(headers1.Authorization).toBe(`Bearer ${token1}`);
+    expect(headers2.Authorization).toBe(`Bearer ${token2}`);
+  });
+});
