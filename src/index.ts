@@ -1,9 +1,85 @@
 import jwt_decode from "jwt-decode";
 
+export interface StorageProvider {
+  getItem(key: string): string | null | Promise<string | null>;
+  setItem(key: string, value: string): void | Promise<void>;
+  removeItem(key: string): void | Promise<void>;
+}
+
+export interface TokenNames {
+  token?: string;
+  refreshToken?: string;
+}
+
+export class BrowserStorageProvider implements StorageProvider {
+  private tokenNames: Required<TokenNames>;
+  
+  constructor(tokenNames?: TokenNames) {
+    this.tokenNames = {
+      token: tokenNames?.token || "token",
+      refreshToken: tokenNames?.refreshToken || "refreshToken",
+    };
+  }
+  
+  getItem(key: string): string | null {
+    if (key === "token") {
+      return (typeof sessionStorage !== "undefined") ? (sessionStorage.getItem(this.tokenNames.token)) : null;
+    }
+    if (key === "refreshToken") {
+      return (typeof localStorage !== "undefined") ? (localStorage.getItem(this.tokenNames.refreshToken)) : null;
+    }
+    return null;
+  }
+  
+  setItem(key: string, value: string): void {
+    if (key === "token" && typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem(this.tokenNames.token, value);
+    }
+    if (key === "refreshToken" && typeof localStorage !== "undefined") {
+      localStorage.setItem(this.tokenNames.refreshToken, value);
+    }
+  }
+  
+  removeItem(key: string): void {
+    if (key === "token" && typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem(this.tokenNames.token);
+    }
+    if (key === "refreshToken" && typeof localStorage !== "undefined") {
+      localStorage.removeItem(this.tokenNames.refreshToken);
+    }
+  }
+}
+
+export class InMemoryStorageProvider implements StorageProvider {
+  private store: Map<string, string>;
+  
+  constructor() {
+    this.store = new Map();
+  }
+  
+  getItem(key: string): string | null {
+    return this.store.get(key) ?? null;
+  }
+  
+  setItem(key: string, value: string): void {
+    this.store.set(key, value);
+  }
+  
+  removeItem(key: string): void {
+    this.store.delete(key);
+  }
+  
+  clear(): void {
+    this.store.clear();
+  }
+}
+
 interface OIDCClientOptions {
   refreshPath?: string;
   baseUrl?: string;
   headers?: Record<string, string>;
+  storageProvider?: StorageProvider;
+  tokenNames?: TokenNames;
 }
 
 interface TokenResponse {
@@ -17,6 +93,7 @@ export class OIDCClient {
   private refreshPath: string;
   private baseUrl: string | undefined;
   private BASE_HEADERS: Record<string, string>;
+  private storageProvider: StorageProvider;
 
   constructor(options?: OIDCClientOptions) {
     this.refreshTokenLock = false;
@@ -26,6 +103,11 @@ export class OIDCClient {
       "Content-Type": "application/json; charset=UTF-8",
       Accept: "application/json, text/javascript, */*; q=0.01",
     };
+    const tokenNames = {
+      token: options?.tokenNames?.token || "token",
+      refreshToken: options?.tokenNames?.refreshToken || "refreshToken",
+    };
+    this.storageProvider = options?.storageProvider || new BrowserStorageProvider(tokenNames);
     this.#refreshTokenPromise = null;
   }
 
@@ -68,9 +150,11 @@ export class OIDCClient {
   }
 
   async getAccessToken(): Promise<string | undefined> {
-    if (typeof localStorage === "undefined" || !localStorage.getItem("refreshToken"))
+    const refreshToken = await this.storageProvider.getItem("refreshToken");
+    if (!refreshToken) {
       // Either we're in a non-browser environment, or session security is used
       return;
+    }
 
     try {
       for (let count = 0; this.refreshTokenLock && count < 15; count++) {
@@ -79,15 +163,15 @@ export class OIDCClient {
       }
 
       if (this.#refreshTokenPromise) await this.#refreshTokenPromise;
-      else if (!this.verifyTokenValidity()) await this._refreshToken();
+      else if (!await this.verifyTokenValidity()) await this._refreshToken();
     } catch (err) {
       console.log(err);
-      sessionStorage.removeItem("token");
-      localStorage.removeItem("refreshToken");
+      await this.storageProvider.removeItem("token");
+      await this.storageProvider.removeItem("refreshToken");
       document.dispatchEvent(new CustomEvent("logged-out", { bubbles: true, composed: true }));
     }
 
-    return sessionStorage.getItem("token") || undefined;
+    return await this.storageProvider.getItem("token") || undefined;
   }
 
   async _wait(time = 1200): Promise<void> {
@@ -98,8 +182,8 @@ export class OIDCClient {
     });
   }
 
-  verifyTokenValidity(): boolean {
-    const token = sessionStorage.getItem("token");
+  async verifyTokenValidity(): Promise<boolean> {
+    const token = await this.storageProvider.getItem("token");
     if (!token) return false;
     try {
       const exp = jwt_decode<{ exp: number }>(token);
@@ -110,8 +194,8 @@ export class OIDCClient {
   }
 
   async _refreshToken(): Promise<void> {
-    const token = sessionStorage.getItem("token");
-    const refreshToken = localStorage.getItem("refreshToken");
+    const token = await this.storageProvider.getItem("token");
+    const refreshToken = await this.storageProvider.getItem("refreshToken");
     const headers: Record<string, string> = { ...this.BASE_HEADERS };
 
     if (!refreshToken) throw new Error("No refresh token");
@@ -136,8 +220,8 @@ export class OIDCClient {
         const refreshToken = data?.["refreshToken"] || response.headers.get("refreshToken");
 
         if (!token && !refreshToken) throw new Error("Couldn't fetch `access-token` or `refresh-token`");
-        if (token) sessionStorage.setItem("token", token);
-        if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
+        if (token) await this.storageProvider.setItem("token", token);
+        if (refreshToken) await this.storageProvider.setItem("refreshToken", refreshToken);
       })
       .catch((err) => {
         console.log("Failed to refresh tokens", err);
