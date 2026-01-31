@@ -58,7 +58,7 @@ export class InMemoryStorageProvider implements StorageProvider {
   }
   
   getItem(key: string): string | null {
-    return this.store.get(key) || null;
+    return this.store.get(key) ?? null;
   }
   
   setItem(key: string, value: string): void {

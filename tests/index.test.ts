@@ -256,7 +256,9 @@ describe("Storage Provider Tests", () => {
   });
 
   test("OIDCClient with InMemoryStorageProvider", async () => {
-    expect.assertions(1);
+    expect.assertions(2);
+    
+    clearStorageMocks(); // Clear any tokens set by prepareToken
     
     const { InMemoryStorageProvider } = await import("../src");
     const provider = new InMemoryStorageProvider();
@@ -266,18 +268,22 @@ describe("Storage Provider Tests", () => {
       storageProvider: provider
     });
     
-    const { token: validToken } = prepareToken("valid");
+    const expiryTime = timeWithOffsetFromThreshold(5);
+    const validToken = jwt.sign({ exp: expiryTime }, "secret");
     
-    // Set tokens in the in-memory provider
+    // Set tokens in the in-memory provider only
     provider.setItem("token", validToken);
     provider.setItem("refreshToken", validToken);
     
     const headers = await client.prepareHeaders();
     expect(headers.Authorization).toBe(`Bearer ${validToken}`);
+    
+    // Verify browser storage remains unaffected
+    expect(sessionStorage.getItem("token")).toBeNull();
   });
 
   test("Multiple OIDCClient instances with different storage providers", async () => {
-    expect.assertions(2);
+    expect.assertions(4);
     
     clearStorageMocks();
     const { InMemoryStorageProvider } = await import("../src");
@@ -307,6 +313,11 @@ describe("Storage Provider Tests", () => {
     
     expect(headers1.Authorization).toBe(`Bearer ${token1}`);
     expect(headers2.Authorization).toBe(`Bearer ${token2}`);
+    
+    // Verify isolation: client1's tokens in browser storage
+    expect(sessionStorage.getItem("token")).toBe(token1);
+    // Verify client2's tokens NOT in browser storage (only in memory)
+    expect(provider2.getItem("token")).toBe(token2);
   });
 
   test("Multiple OIDCClient instances with different token names", async () => {
