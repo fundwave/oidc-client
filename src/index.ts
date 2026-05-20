@@ -9,8 +9,11 @@ interface OIDCClientOptions {
 interface TokenResponse {
   token?: string;
   idToken?: string;
+  id_token?: string;
   accessToken?: string;
+  access_token?: string;
   refreshToken?: string;
+  refresh_token?: string;
 }
 
 export class OIDCClient {
@@ -94,7 +97,7 @@ export class OIDCClient {
       this.sessionStorage.removeItem("token");
       this.sessionStorage.removeItem("accessToken");
       this.localStorage.removeItem("refreshToken");
-      if (document) document.dispatchEvent(new CustomEvent("logged-out", { bubbles: true, composed: true }));
+      if (typeof document !== "undefined") document.dispatchEvent(new CustomEvent("logged-out", { bubbles: true, composed: true }));
     }
 
     return this.sessionStorage.getItem(tokenType) || undefined;
@@ -145,10 +148,10 @@ export class OIDCClient {
         if (response.status === 403) throw 403;
 
         const data = await response.json() as TokenResponse;
-        const token = data?.["token"] || response.headers.get("token");
-        const idToken = data?.["id_token"] || response.headers.get("id_token");
-        const accessToken = data?.["access_token"] || response.headers.get("access_token");
-        const refreshToken = data?.["refreshToken"] || response.headers.get("refreshToken");
+        const token = data?.token || response.headers?.get?.("token") || undefined;
+        const idToken = data?.id_token || data?.idToken || response.headers?.get?.("id_token") || response.headers?.get?.("idToken") || undefined;
+        const accessToken = data?.access_token || data?.accessToken || response.headers?.get?.("access_token") || response.headers?.get?.("accessToken") || undefined;
+        const refreshToken = data?.refresh_token || data?.refreshToken || response.headers?.get?.("refresh_token") || response.headers?.get?.("refreshToken") || undefined;
 
         if (!token && !idToken && !accessToken && !refreshToken) throw new Error("Couldn't fetch any of `id-token`, `access-token` or `refresh-token`");
         if (token) this.sessionStorage.setItem("token", token);
