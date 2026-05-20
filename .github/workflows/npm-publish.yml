@@ -98,20 +98,27 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPMJS_TOKEN}}
 
-  publish-gitlab:
+  publish-github:
     needs: release
     environment: ${{ github.ref_name == 'main' && 'prod' || '' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v3
       - run: git pull origin ${{ github.ref }}
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          registry-url: https://npm.pkg.github.com
       - name: Setup .npmrc file for publish
-        env:
-          GITLAB_TOKEN: ${{secrets.GITLAB_TOKEN}}
         run: |
-          echo @fundwave:registry=https://gitlab.com/api/v4/projects/24877554/packages/npm/ >> ~/.npmrc
-          echo //gitlab.com/api/v4/projects/24877554/packages/npm/:_authToken=$GITLAB_TOKEN >> ~/.npmrc
+          echo "@fundwave:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
       - name: Install dependencies
         run: npm ci
       - name: Publish package
         run: npm publish --tag $BRANCH_TAG
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
