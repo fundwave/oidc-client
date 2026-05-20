@@ -26,6 +26,8 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'Prod' || '' }}
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Generate token
         if: ${{ github.ref_name == 'main' }}
