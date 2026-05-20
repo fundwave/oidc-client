@@ -85,8 +85,8 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'prod' || '' }}
     runs-on: ubuntu-latest
     permissions:
+      id-token: write # Required for trusted publishing
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v3
       - run: git pull origin ${{ github.ref }}
