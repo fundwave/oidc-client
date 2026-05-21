@@ -66,6 +66,48 @@ test("Verify valid token", () => {
   expect(OIDCClient.verifyTokenValidity()).toBe(true);
 });
 
+test("Verify accessToken validity — absent", () => {
+  prepareToken("valid");
+
+  expect(OIDCClient.verifyTokenValidity("accessToken")).toBe(false);
+});
+
+test("Verify accessToken validity — valid", () => {
+  prepareToken("valid");
+  const validAccessToken = jwt.sign({ exp: timeWithOffsetFromThreshold(5) }, "secret");
+  sessionStorage.setItem("accessToken", validAccessToken);
+
+  expect(OIDCClient.verifyTokenValidity("accessToken")).toBe(true);
+});
+
+test("Verify accessToken validity — expired", () => {
+  prepareToken("valid");
+  const expiredAccessToken = jwt.sign({ exp: timeWithOffsetFromThreshold(-5) }, "secret");
+  sessionStorage.setItem("accessToken", expiredAccessToken);
+
+  expect(OIDCClient.verifyTokenValidity("accessToken")).toBe(false);
+});
+
+test("getAccessToken('accessToken') refreshes when accessToken expired but id-token valid", async () => {
+  expect.assertions(2);
+
+  prepareToken("valid");
+  const expiredAccessToken = jwt.sign({ exp: timeWithOffsetFromThreshold(-5) }, "secret");
+  sessionStorage.setItem("accessToken", expiredAccessToken);
+
+  const refreshedAccessToken = jwt.sign({ exp: timeWithOffsetFromThreshold(5) }, "secret");
+  const fetchMock = jest.fn(() =>
+    Promise.resolve({
+      json: () => Promise.resolve({ accessToken: refreshedAccessToken }),
+    })
+  );
+  (global as any).fetch = fetchMock;
+
+  const received = await OIDCClient.getAccessToken("accessToken");
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(received).toBe(refreshedAccessToken);
+});
+
 test("Prepare headers with valid token", async () => {
   expect.assertions(1);
 

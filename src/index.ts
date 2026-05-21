@@ -90,7 +90,7 @@ export class OIDCClient {
       }
 
       if (this.#refreshTokenPromise) await this.#refreshTokenPromise;
-      else if (!this.verifyTokenValidity()) await this._refreshToken();
+      else if (!this.verifyTokenValidity(tokenType)) await this._refreshToken();
 
     } catch (err) {
       console.log(err);
@@ -112,8 +112,8 @@ export class OIDCClient {
     });
   }
 
-  verifyTokenValidity(): boolean {
-    const token = this.sessionStorage.getItem("token");
+  verifyTokenValidity(tokenType: string = "token"): boolean {
+    const token = this.sessionStorage.getItem(tokenType);
     if (!token) return false;
     try {
       const exp = jwt_decode<{ exp: number }>(token);
