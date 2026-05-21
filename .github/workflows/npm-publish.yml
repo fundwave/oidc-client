@@ -85,14 +85,14 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'prod' || '' }}
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # Required for trusted publishing
+      id-token: write
       contents: read
     steps:
       - uses: actions/checkout@v3
       - run: git pull origin ${{ github.ref }}
       - uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: 24
           registry-url: https://registry.npmjs.org
       - name: Install dependencies
         run: npm ci
@@ -113,7 +113,7 @@ jobs:
       - run: git pull origin ${{ github.ref }}
       - uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: 24
           registry-url: https://npm.pkg.github.com
       - name: Setup .npmrc file for publish
         run: |
