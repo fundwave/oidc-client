@@ -67,10 +67,10 @@ export class OIDCClient {
     this.refreshTokenLock = false;
   }
 
-  async prepareHeaders(headers?: Record<string, string>): Promise<Record<string, string>> {
+  async prepareHeaders(headers?: Record<string, string>, tokenType: string = "token"): Promise<Record<string, string>> {
 
     if (!headers) headers = this.BASE_HEADERS;
-    const token = await this.getAccessToken();
+    const token = await this.getAccessToken(tokenType);
     if (token) return { ...headers, Authorization: `Bearer ${token}` };
     return headers;
 
