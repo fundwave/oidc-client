@@ -25,7 +25,7 @@ export class OIDCClient {
   private sessionStorage: Storage;
   private localStorage: Storage;
 
-  constructor(options?: OIDCClientOptions, sessionStorageParam: Storage = sessionStorage, localStorageParam: Storage = localStorage) {
+  constructor(options?: OIDCClientOptions, sessionStorageParam?: Storage, localStorageParam?: Storage) {
     this.refreshTokenLock = false;
     this.refreshPath = options?.refreshPath || "token/refresh";
     this.baseUrl = options?.baseUrl;
@@ -34,8 +34,8 @@ export class OIDCClient {
       Accept: "application/json, text/javascript, */*; q=0.01",
     };
     this.#refreshTokenPromise = null;
-    this.sessionStorage = sessionStorageParam;
-    this.localStorage = localStorageParam;
+    this.sessionStorage = sessionStorageParam ?? (globalThis as any).sessionStorage;
+    this.localStorage = localStorageParam ?? (globalThis as any).localStorage;
   }
 
   setBaseUrl(url: string): void {
@@ -95,6 +95,7 @@ export class OIDCClient {
     } catch (err) {
       console.log(err);
       this.sessionStorage.removeItem("token");
+      this.sessionStorage.removeItem("idToken");
       this.sessionStorage.removeItem("accessToken");
       this.localStorage.removeItem("refreshToken");
       if (typeof document !== "undefined") document.dispatchEvent(new CustomEvent("logged-out", { bubbles: true, composed: true }));
@@ -153,7 +154,7 @@ export class OIDCClient {
         const accessToken = data?.access_token || data?.accessToken || response.headers?.get?.("access_token") || response.headers?.get?.("accessToken") || undefined;
         const refreshToken = data?.refresh_token || data?.refreshToken || response.headers?.get?.("refresh_token") || response.headers?.get?.("refreshToken") || undefined;
 
-        if (!token && !idToken && !accessToken && !refreshToken) throw new Error("Couldn't fetch any of `id-token`, `access-token` or `refresh-token`");
+        if (!token && !idToken && !accessToken && !refreshToken) throw new Error("Couldn't fetch any of `token`, `id-token`, `access-token` or `refresh-token`");
         if (token) this.sessionStorage.setItem("token", token);
         if (idToken) this.sessionStorage.setItem("idToken", idToken);
         if (accessToken) this.sessionStorage.setItem("accessToken", accessToken);
