@@ -8,7 +8,12 @@ interface OIDCClientOptions {
 
 interface TokenResponse {
   token?: string;
+  idToken?: string;
+  id_token?: string;
+  accessToken?: string;
+  access_token?: string;
   refreshToken?: string;
+  refresh_token?: string;
 }
 
 export class OIDCClient {
@@ -17,8 +22,10 @@ export class OIDCClient {
   private refreshPath: string;
   private baseUrl: string | undefined;
   private BASE_HEADERS: Record<string, string>;
+  private sessionStorage: Storage | undefined;
+  private localStorage: Storage | undefined;
 
-  constructor(options?: OIDCClientOptions) {
+  constructor(options?: OIDCClientOptions, sessionStorageParam?: Storage, localStorageParam?: Storage) {
     this.refreshTokenLock = false;
     this.refreshPath = options?.refreshPath || "token/refresh";
     this.baseUrl = options?.baseUrl;
@@ -27,6 +34,8 @@ export class OIDCClient {
       Accept: "application/json, text/javascript, */*; q=0.01",
     };
     this.#refreshTokenPromise = null;
+    this.sessionStorage = sessionStorageParam ?? (globalThis as any).sessionStorage;
+    this.localStorage = localStorageParam ?? (globalThis as any).localStorage;
   }
 
   setBaseUrl(url: string): void {
@@ -58,19 +67,21 @@ export class OIDCClient {
     this.refreshTokenLock = false;
   }
 
-  async prepareHeaders(headers?: Record<string, string>): Promise<Record<string, string>> {
+  async prepareHeaders(headers?: Record<string, string>, tokenType: string = "token"): Promise<Record<string, string>> {
+
     if (!headers) headers = this.BASE_HEADERS;
-
-    const token = await this.getAccessToken();
-
+    const token = await this.getAccessToken(tokenType);
     if (token) return { ...headers, Authorization: `Bearer ${token}` };
     return headers;
+
   }
 
-  async getAccessToken(): Promise<string | undefined> {
-    if (typeof localStorage === "undefined" || !localStorage.getItem("refreshToken"))
-      // Either we're in a non-browser environment, or session security is used
+  async getAccessToken(tokenType: string = "token"): Promise<string | undefined> {
+    
+    if (!this.sessionStorage || !this.localStorage || !this.localStorage.getItem("refreshToken")) {
+      console.log("Info: Either we're in an environment without storage, or session security is used");
       return;
+    }
 
     try {
       for (let count = 0; this.refreshTokenLock && count < 15; count++) {
@@ -79,15 +90,19 @@ export class OIDCClient {
       }
 
       if (this.#refreshTokenPromise) await this.#refreshTokenPromise;
-      else if (!this.verifyTokenValidity()) await this._refreshToken();
+      else if (!this.verifyTokenValidity(tokenType)) await this._refreshToken();
+
     } catch (err) {
       console.log(err);
-      sessionStorage.removeItem("token");
-      localStorage.removeItem("refreshToken");
-      document.dispatchEvent(new CustomEvent("logged-out", { bubbles: true, composed: true }));
+      this.sessionStorage?.removeItem("token");
+      this.sessionStorage?.removeItem("idToken");
+      this.sessionStorage?.removeItem("accessToken");
+      this.localStorage?.removeItem("refreshToken");
+      if (typeof document !== "undefined") document.dispatchEvent(new CustomEvent("logged-out", { bubbles: true, composed: true }));
     }
 
-    return sessionStorage.getItem("token") || undefined;
+    return this.sessionStorage.getItem(tokenType) || undefined;
+
   }
 
   async _wait(time = 1200): Promise<void> {
@@ -98,8 +113,8 @@ export class OIDCClient {
     });
   }
 
-  verifyTokenValidity(): boolean {
-    const token = sessionStorage.getItem("token");
+  verifyTokenValidity(tokenType: string = "token"): boolean {
+    const token = this.sessionStorage.getItem(tokenType);
     if (!token) return false;
     try {
       const exp = jwt_decode<{ exp: number }>(token);
@@ -110,8 +125,10 @@ export class OIDCClient {
   }
 
   async _refreshToken(): Promise<void> {
-    const token = sessionStorage.getItem("token");
-    const refreshToken = localStorage.getItem("refreshToken");
+    
+    const token = this.sessionStorage.getItem("token");
+    const refreshToken = this.localStorage.getItem("refreshToken");
+
     const headers: Record<string, string> = { ...this.BASE_HEADERS };
 
     if (!refreshToken) throw new Error("No refresh token");
@@ -132,12 +149,17 @@ export class OIDCClient {
         if (response.status === 403) throw 403;
 
         const data = await response.json() as TokenResponse;
-        const token = data?.["token"] || response.headers.get("token");
-        const refreshToken = data?.["refreshToken"] || response.headers.get("refreshToken");
+        const token = data?.token || response.headers?.get?.("token") || undefined;
+        const idToken = data?.id_token || data?.idToken || response.headers?.get?.("id_token") || response.headers?.get?.("idToken") || undefined;
+        const accessToken = data?.access_token || data?.accessToken || response.headers?.get?.("access_token") || response.headers?.get?.("accessToken") || undefined;
+        const refreshToken = data?.refresh_token || data?.refreshToken || response.headers?.get?.("refresh_token") || response.headers?.get?.("refreshToken") || undefined;
 
-        if (!token && !refreshToken) throw new Error("Couldn't fetch `access-token` or `refresh-token`");
-        if (token) sessionStorage.setItem("token", token);
-        if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
+        if (!token && !idToken && !accessToken && !refreshToken) throw new Error("Couldn't fetch any of `token`, `id-token`, `access-token` or `refresh-token`");
+        if (token) this.sessionStorage.setItem("token", token);
+        if (idToken) this.sessionStorage.setItem("idToken", idToken);
+        if (accessToken) this.sessionStorage.setItem("accessToken", accessToken);
+        if (refreshToken) this.localStorage.setItem("refreshToken", refreshToken);
+
       })
       .catch((err) => {
         console.log("Failed to refresh tokens", err);
