@@ -121,3 +121,5 @@ jobs:
         run: npm ci
       - name: Publish package
         run: npm publish --tag $BRANCH_TAG
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
