@@ -22,8 +22,8 @@ export class OIDCClient {
   private refreshPath: string;
   private baseUrl: string | undefined;
   private BASE_HEADERS: Record<string, string>;
-  private sessionStorage: Storage;
-  private localStorage: Storage;
+  private sessionStorage: Storage | undefined;
+  private localStorage: Storage | undefined;
 
   constructor(options?: OIDCClientOptions, sessionStorageParam?: Storage, localStorageParam?: Storage) {
     this.refreshTokenLock = false;
@@ -78,7 +78,7 @@ export class OIDCClient {
 
   async getAccessToken(tokenType: string = "token"): Promise<string | undefined> {
     
-    if (typeof this.localStorage === "undefined" || !this.localStorage.getItem("refreshToken")) {
+    if (!this.sessionStorage || !this.localStorage || !this.localStorage.getItem("refreshToken")) {
       console.log("Info: Either we're in an environment without storage, or session security is used");
       return;
     }
@@ -94,10 +94,10 @@ export class OIDCClient {
 
     } catch (err) {
       console.log(err);
-      this.sessionStorage.removeItem("token");
-      this.sessionStorage.removeItem("idToken");
-      this.sessionStorage.removeItem("accessToken");
-      this.localStorage.removeItem("refreshToken");
+      this.sessionStorage?.removeItem("token");
+      this.sessionStorage?.removeItem("idToken");
+      this.sessionStorage?.removeItem("accessToken");
+      this.localStorage?.removeItem("refreshToken");
       if (typeof document !== "undefined") document.dispatchEvent(new CustomEvent("logged-out", { bubbles: true, composed: true }));
     }
 
